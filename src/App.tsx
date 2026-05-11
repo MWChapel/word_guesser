@@ -22,6 +22,7 @@ import {
   Help as HelpIcon,
 } from '@mui/icons-material';
 import './App.css';
+import { calculateEntropy } from './entropy';
 
 // Types
 interface WordData {
@@ -29,6 +30,7 @@ interface WordData {
   arrayVal: string[];
   uniqueLetters: Set<string>;
   score: number;
+  entropy?: number;
   secondWords?: string;
 }
 
@@ -181,10 +183,14 @@ function App() {
           wordObj.score = score;
         });
 
-        // Filter for unique letters and sort
+        // Filter for unique letters, score by entropy, and sort
+        const answerWords = processedWords.map((w: WordData) => w.word);
         const filtered = processedWords
-          .filter((item: WordData) => item.uniqueLetters.size === 5)
-          .sort((a: WordData, b: WordData) => b.score - a.score);
+          .filter((item: WordData) => item.uniqueLetters.size === 5);
+        filtered.forEach((item: WordData) => {
+          item.entropy = calculateEntropy(item.word, answerWords);
+        });
+        filtered.sort((a: WordData, b: WordData) => (b.entropy ?? 0) - (a.entropy ?? 0));
 
         // Add second words
         filtered.forEach((item: WordData) => {
@@ -305,7 +311,8 @@ function App() {
     setValidAnswers(filtered);
     setShowAllValid(false);
 
-    // Calculate elimination words
+    // Calculate elimination words ranked by entropy against the remaining valid answers
+    const validAnswerWords = filtered.map((w: WordData) => w.word);
     const includedSet = new Set(Array.from(includedLetters.toLowerCase()));
     const excludedSet = new Set(Array.from(excludedLettersString.toLowerCase()));
     const remainingLetters = 'abcdefghijklmnopqrstuvwxyz'.split('').filter(letter =>
@@ -326,7 +333,8 @@ function App() {
         }
         return count > 2 && item.uniqueLetters.size === 5;
       })
-      .sort((a: WordData, b: WordData) => b.score - a.score)
+      .map((item: WordData) => ({ ...item, entropy: calculateEntropy(item.word, validAnswerWords) }))
+      .sort((a, b) => (b.entropy ?? 0) - (a.entropy ?? 0))
       .slice(0, 40);
 
     setEliminationWords(elimination);
@@ -642,7 +650,7 @@ function App() {
                     {displayedValid.map((word) => (
                       <Chip
                         key={word.word}
-                        label={`${word.word.toUpperCase()} (${word.score.toLocaleString()})`}
+                        label={word.word.toUpperCase()}
                         variant="filled"
                         color="primary"
                         size="medium"
@@ -704,7 +712,7 @@ function App() {
                   {eliminationWords.slice(0, 20).map((word) => (
                     <Chip
                       key={word.word}
-                      label={`${word.word.toUpperCase()} (${word.score.toLocaleString()})`}
+                      label={`${word.word.toUpperCase()} (${word.entropy?.toFixed(1)}b)`}
                       variant="filled"
                       color="secondary"
                       size="medium"
@@ -766,7 +774,7 @@ function App() {
                       </Typography>
                     </Box>
                     <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
-                      score: {item.score.toLocaleString()}
+                      {item.entropy?.toFixed(2)} bits
                     </Typography>
                     <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.4 }}>
                       2nd words:
