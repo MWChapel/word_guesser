@@ -68,13 +68,13 @@ const theme = createTheme({
   },
   typography: {
     fontFamily: MONO,
-    fontSize: 11,
-    h3: { fontFamily: MONO, fontSize: '1.4rem', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase' as const },
-    h5: { fontFamily: MONO, fontSize: '0.85rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const },
-    h6: { fontFamily: MONO, fontSize: '0.78rem', fontWeight: 600, letterSpacing: '0.06em' },
-    body1: { fontFamily: MONO, fontSize: '0.75rem' },
-    body2: { fontFamily: MONO, fontSize: '0.7rem' },
-    caption: { fontFamily: MONO, fontSize: '0.62rem' },
+    fontSize: 10,
+    h3: { fontFamily: MONO, fontSize: '1.1rem', fontWeight: 700, letterSpacing: '0.14em', textTransform: 'uppercase' as const },
+    h5: { fontFamily: MONO, fontSize: '0.72rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase' as const },
+    h6: { fontFamily: MONO, fontSize: '0.68rem', fontWeight: 600, letterSpacing: '0.05em' },
+    body1: { fontFamily: MONO, fontSize: '0.65rem' },
+    body2: { fontFamily: MONO, fontSize: '0.62rem' },
+    caption: { fontFamily: MONO, fontSize: '0.56rem' },
   },
   components: {
     MuiPaper: {
@@ -89,18 +89,18 @@ const theme = createTheme({
     },
     MuiButton: {
       styleOverrides: {
-        root: { fontFamily: MONO, fontSize: '0.68rem', letterSpacing: '0.06em', borderRadius: 2 },
+        root: { fontFamily: MONO, fontSize: '0.6rem', letterSpacing: '0.06em', borderRadius: 2 },
         outlined: { borderColor: '#1e3a1e' },
       },
     },
     MuiChip: {
       styleOverrides: {
-        root: { fontFamily: MONO, fontSize: '0.65rem', borderRadius: 2 },
+        root: { fontFamily: MONO, fontSize: '0.58rem', borderRadius: 2 },
       },
     },
     MuiAlert: {
       styleOverrides: {
-        root: { fontFamily: MONO, fontSize: '0.68rem', borderRadius: 2 },
+        root: { fontFamily: MONO, fontSize: '0.6rem', borderRadius: 2 },
       },
     },
     MuiDivider: {
@@ -125,9 +125,18 @@ function App() {
   const [showHelp, setShowHelp] = useState(false);
   const [showAllValid, setShowAllValid] = useState(false);
 
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const exactRefs = useRef<(HTMLInputElement | null)[]>([null, null, null, null, null]);
-  const excludeRefs = useRef<(HTMLInputElement | null)[]>([null, null, null, null, null]);
+  const debounceRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const exactRefs       = useRef<(HTMLInputElement | null)[]>([null, null, null, null, null]);
+  const excludeRefs     = useRef<(HTMLInputElement | null)[]>([null, null, null, null, null]);
+  const bookmarkletRef  = useRef<HTMLAnchorElement>(null);
+  const [bookmarkletCopied, setBookmarkletCopied] = useState(false);
+
+  const bookmarkletCode = `javascript:(function(){var board=document.querySelector('[role="grid"]')||document.body;var tiles=Array.from(board.querySelectorAll('[data-state="correct"],[data-state="present"],[data-state="absent"]')).filter(function(el){return /^[A-Za-z]$/.test((el.textContent||'').trim());});var grey={},green=['','','','',''],yellow=['','','','',''];for(var r=0;r<Math.ceil(tiles.length/5);r++){var row=tiles.slice(r*5,r*5+5);if(row.length<5)continue;row.forEach(function(t,p){var s=t.getAttribute('data-state'),l=(t.textContent||'').trim().toUpperCase();if(s==='correct')green[p]=l;else if(s==='present'){if(yellow[p].indexOf(l)<0)yellow[p]+=l;}else if(s==='absent')grey[l]=1;});}green.forEach(function(l){delete grey[l];});yellow.forEach(function(l){l.split('').forEach(function(c){delete grey[c];});});var p=[];var ex=Object.keys(grey).join('');if(ex)p.push('ex='+ex);var g=green.map(function(l){return l||'_';}).join('');if(g!=='_____')p.push('g='+g);yellow.forEach(function(l,i){if(l)p.push('y'+i+'='+l);});window.open('${window.location.origin}'+(p.length?'?'+p.join('&'):''),'wordle-chooser');})();`;
+
+  // Set bookmarklet href via DOM — React blocks javascript: URLs at render time
+  useEffect(() => {
+    bookmarkletRef.current?.setAttribute('href', bookmarkletCode);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load and process word data
   useEffect(() => {
@@ -217,6 +226,30 @@ function App() {
     loadWords();
   }, []);
 
+  // Read URL params set by the bookmarklet and pre-fill filters
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (!params.toString()) return;
+
+    const ex = params.get('ex') || '';
+    const g  = params.get('g')  || '_____';
+
+    const newExcluded = Array(26).fill('');
+    ex.toUpperCase().split('').forEach(letter => {
+      const idx = letter.charCodeAt(0) - 65;
+      if (idx >= 0 && idx < 26) newExcluded[idx] = letter.toLowerCase();
+    });
+
+    const newExact  = (g + '_____').slice(0, 5).split('').map(l => l === '_' ? '' : l.toLowerCase());
+    const newYellow = ['', '', '', '', ''];
+    for (let i = 0; i < 5; i++) {
+      newYellow[i] = (params.get(`y${i}`) || '').toLowerCase();
+    }
+
+    setFilterState({ excludedLetters: newExcluded, exactLetters: newExact, excludeLetters: newYellow });
+    window.history.replaceState({}, '', window.location.pathname);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   const hasFilters =
     filterState.excludedLetters.some(l => l !== '') ||
     filterState.exactLetters.some(l => l !== '') ||
@@ -279,11 +312,11 @@ function App() {
       });
     }
 
-    // Filter by exclude letters (position-specific exclusions)
+    // Filter by exclude letters (position-specific exclusions, supports multiple chars per slot)
     if (excludeLetters.some(letter => letter !== '')) {
       filtered = filtered.filter((item: WordData) => {
         for (let i = 0; i < 5; i++) {
-          if (excludeLetters[i] !== '' && item.arrayVal[i] === excludeLetters[i].toLowerCase()) return false;
+          if (excludeLetters[i] !== '' && excludeLetters[i].toLowerCase().includes(item.arrayVal[i])) return false;
         }
         return true;
       });
@@ -375,7 +408,7 @@ function App() {
         if (excludeLetters.some(letter => letter !== '')) {
           rareFiltered = rareFiltered.filter((item: WordData) => {
             for (let i = 0; i < 5; i++) {
-              if (excludeLetters[i] !== '' && item.arrayVal[i] === excludeLetters[i].toLowerCase()) return false;
+              if (excludeLetters[i] !== '' && excludeLetters[i].toLowerCase().includes(item.arrayVal[i])) return false;
             }
             return true;
           });
@@ -408,15 +441,16 @@ function App() {
   };
 
   const handleLetterChange = (field: 'exactLetters' | 'excludeLetters', position: number, value: string) => {
-    const newValue = value.replace(/[^a-zA-Z]/g, '').slice(-1).toLowerCase();
+    const cleaned = value.replace(/[^a-zA-Z]/g, '').toLowerCase();
+    // Exact positions: single char + auto-advance. Yellow positions: allow multiple chars (multi-guess yellows).
+    const isExact = field === 'exactLetters';
+    const newValue = isExact ? cleaned.slice(-1) : cleaned;
     setFilterState(prev => ({
       ...prev,
       [field]: prev[field].map((letter, index) => index === position ? newValue : letter)
     }));
-    // Auto-advance to next position when a letter is typed
-    if (newValue && position < 4) {
-      const refs = field === 'exactLetters' ? exactRefs : excludeRefs;
-      setTimeout(() => refs.current[position + 1]?.focus(), 0);
+    if (isExact && newValue && position < 4) {
+      setTimeout(() => exactRefs.current[position + 1]?.focus(), 0);
     }
   };
 
@@ -438,7 +472,7 @@ function App() {
   const displayedValid = showAllValid ? validAnswers : validAnswers.slice(0, 50);
 
   const positionInputSx = (active: boolean, color: string) => ({
-    width: '56px',
+    width: '48px',
     '& .MuiOutlinedInput-root': {
       '& fieldset': {
         borderColor: active ? color : '#1a3a1a',
@@ -456,9 +490,9 @@ function App() {
   return (
     <ThemeProvider theme={theme}>
       <CssBaseline />
-      <Container maxWidth="lg" sx={{ py: 4 }}>
+      <Container maxWidth="lg" sx={{ py: 2 }}>
         {/* Header */}
-        <Box sx={{ textAlign: 'center', mb: 4 }}>
+        <Box sx={{ textAlign: 'center', mb: 2 }}>
           <Typography variant="h3" component="h1" gutterBottom sx={{
             color: WORDLE_GREEN,
             textShadow: `0 0 12px ${WORDLE_GREEN}88, 0 0 24px ${WORDLE_GREEN}44`,
@@ -483,19 +517,64 @@ function App() {
           </Box>
         </Box>
 
+        {/* Bookmarklet Section */}
+        <Paper sx={{ p: 1.5, mb: 2, borderColor: `${WORDLE_YELLOW}44` }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
+            <Typography variant="body2" sx={{ color: WORDLE_YELLOW, flexShrink: 0 }}>
+              🔖 wordle sync:
+            </Typography>
+            {/* Native <a> with href set via ref after mount — React blocks javascript: URLs at render time */}
+            <a
+              ref={bookmarkletRef}
+              href="#"
+              style={{
+                display: 'inline-block',
+                padding: '3px 10px',
+                border: `1px solid ${WORDLE_YELLOW}`,
+                borderRadius: '3px',
+                color: WORDLE_YELLOW,
+                fontSize: '0.65rem',
+                fontFamily: MONO,
+                fontWeight: 700,
+                letterSpacing: '0.06em',
+                textDecoration: 'none',
+                cursor: 'grab',
+                userSelect: 'none',
+              }}
+            >
+              ▶ IMPORT FROM WORDLE
+            </a>
+            <Button
+              size="small"
+              variant="outlined"
+              sx={{ fontSize: '0.58rem', py: 0.3, px: 1, borderColor: `${WORDLE_YELLOW}66`, color: 'text.secondary' }}
+              onClick={() => {
+                navigator.clipboard.writeText(bookmarkletCode);
+                setBookmarkletCopied(true);
+                setTimeout(() => setBookmarkletCopied(false), 2000);
+              }}
+            >
+              {bookmarkletCopied ? '✓ copied' : 'copy url'}
+            </Button>
+            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+              drag link to bookmarks bar → click while playing wordle to auto-fill
+            </Typography>
+          </Box>
+        </Paper>
+
         {/* Filter Section */}
-        <Paper sx={{ p: 3, mb: 3 }}>
+        <Paper sx={{ p: 2, mb: 2 }}>
           <Typography variant="h5" component="h2" gutterBottom>
             🎮 Word Filter
           </Typography>
 
-          <Box sx={{ mb: 3 }}>
+          <Box sx={{ mb: 1.5 }}>
             {/* Row 1: Grey Letters (excluded entirely) */}
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="h6" gutterBottom sx={{ mb: 1.5, color: WORDLE_GREY }}>
+            <Box sx={{ mb: 1.5 }}>
+              <Typography variant="h6" gutterBottom sx={{ mb: 0.75, color: WORDLE_GREY }}>
                 ⬜ Grey Letters — not in the word at all:
               </Typography>
-              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, alignItems: 'center' }}>
+              <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, alignItems: 'center' }}>
                 {Array.from('abcdefghijklmnopqrstuvwxyz').map((letter, index) => (
                   <Button
                     key={index}
@@ -503,10 +582,10 @@ function App() {
                     size="small"
                     onClick={() => handleExcludedLetterChange(index, filterState.excludedLetters[index] ? '' : letter)}
                     sx={{
-                      minWidth: '40px',
-                      width: '40px',
-                      height: '40px',
-                      fontSize: '0.75rem',
+                      minWidth: '34px',
+                      width: '34px',
+                      height: '34px',
+                      fontSize: '0.62rem',
                       fontWeight: 700,
                       fontFamily: MONO,
                       textTransform: 'uppercase',
@@ -530,8 +609,8 @@ function App() {
             </Box>
 
             {/* Row 2: Green Letters (exact position) */}
-            <Box sx={{ mb: 3 }}>
-              <Typography variant="h6" gutterBottom sx={{ mb: 1.5, color: WORDLE_GREEN }}>
+            <Box sx={{ mb: 1.5 }}>
+              <Typography variant="h6" gutterBottom sx={{ mb: 0.75, color: WORDLE_GREEN }}>
                 🟩 Green Letters — correct letter, correct position:
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
@@ -552,7 +631,7 @@ function App() {
                           style: {
                             textAlign: 'center',
                             textTransform: 'uppercase',
-                            fontSize: '1.4rem',
+                            fontSize: '1.1rem',
                             fontWeight: 'bold',
                             color: WORDLE_GREEN,
                           }
@@ -567,7 +646,7 @@ function App() {
 
             {/* Row 3: Yellow Letters (in word, wrong position) */}
             <Box>
-              <Typography variant="h6" gutterBottom sx={{ mb: 1.5, color: WORDLE_YELLOW }}>
+              <Typography variant="h6" gutterBottom sx={{ mb: 0.75, color: WORDLE_YELLOW }}>
                 🟨 Yellow Letters — in the word, but not in this position:
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
@@ -584,11 +663,11 @@ function App() {
                       onKeyDown={(e) => handleLetterKeyDown('excludeLetters', position, e)}
                       slotProps={{
                         htmlInput: {
-                          maxLength: 1,
+                          maxLength: 5,
                           style: {
                             textAlign: 'center',
                             textTransform: 'uppercase',
-                            fontSize: '1.4rem',
+                            fontSize: filterState.excludeLetters[position].length > 1 ? '0.65rem' : '1.1rem',
                             fontWeight: 'bold',
                             color: WORDLE_YELLOW,
                           }
@@ -622,17 +701,17 @@ function App() {
 
         {/* Inline Results Section — visible whenever any filter is set */}
         {hasFilters && (
-          <Paper sx={{ p: 3, mb: 3 }}>
+          <Paper sx={{ p: 2, mb: 2 }}>
             <Typography variant="h5" component="h2" gutterBottom>
               📊 Results
             </Typography>
 
             {/* Valid Answers */}
-            <Box sx={{ mb: 4 }}>
+            <Box sx={{ mb: 2 }}>
               <Typography variant="h6" gutterBottom>
                 ✅ Valid Answers ({validAnswers.length} {validAnswers.length === 1 ? 'word' : 'words'})
               </Typography>
-              <Divider sx={{ mb: 2 }} />
+              <Divider sx={{ mb: 1 }} />
               {validAnswers.length === 0 ? (
                 <Alert severity="warning">No common words match your criteria.</Alert>
               ) : (
@@ -664,11 +743,11 @@ function App() {
 
             {/* Rare Words — always shown when any match */}
             {rareWords.length > 0 && (
-              <Box sx={{ mb: 4 }}>
+              <Box sx={{ mb: 2 }}>
                 <Typography variant="h6" gutterBottom>
                   🦄 Rare Words ({rareWords.length} {rareWords.length === 1 ? 'word' : 'words'})
                 </Typography>
-                <Divider sx={{ mb: 2 }} />
+                <Divider sx={{ mb: 1 }} />
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
                   {rareWords.slice(0, 50).map((word) => (
                     <Chip
@@ -695,7 +774,7 @@ function App() {
               <Typography variant="h6" gutterBottom>
                 🎯 Best Elimination Words ({eliminationWords.length} {eliminationWords.length === 1 ? 'word' : 'words'})
               </Typography>
-              <Divider sx={{ mb: 2 }} />
+              <Divider sx={{ mb: 1 }} />
               {eliminationWords.length === 0 ? (
                 <Alert severity="info">No suitable elimination words found.</Alert>
               ) : (
@@ -723,7 +802,7 @@ function App() {
         )}
 
         {/* Top Words Section */}
-        <Paper sx={{ p: 3, mb: 3 }}>
+        <Paper sx={{ p: 2, mb: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
             <Typography variant="h5" component="h2">
               🏆 Top 10 Best First Words
@@ -742,40 +821,33 @@ function App() {
             </Alert>
           )}
 
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
             {filteredMasterList.slice(0, 10).map((item, index) => (
-              <Box key={item.word} sx={{ flex: '1 1 280px', minWidth: 0 }}>
+              <Box key={item.word} sx={{ flex: '1 1 220px', minWidth: 0 }}>
                 <Card sx={{
                   height: '100%',
-                  transition: 'all 0.2s ease-in-out',
-                  '&:hover': {
-                    transform: 'translateY(-2px)',
-                    boxShadow: 3
-                  }
+                  transition: 'all 0.15s ease-in-out',
+                  '&:hover': { transform: 'translateY(-2px)', boxShadow: 3 }
                 }}>
-                  <CardContent sx={{ p: 2, '&:last-child': { pb: 2 } }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 1 }}>
-                      <Typography variant="h6" component="span" sx={{ mr: 1, fontSize: '1.1rem' }}>
+                  <CardContent sx={{ p: 1.5, '&:last-child': { pb: 1.5 } }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', mb: 0.5 }}>
+                      <Typography variant="body2" component="span" sx={{ mr: 0.75, fontSize: '0.75rem' }}>
                         {index === 0 ? '🥇' : index === 1 ? '🥈' : index === 2 ? '🥉' : `${index + 1}.`}
                       </Typography>
-                      <Typography variant="h6" component="span" sx={{
+                      <Typography variant="body1" component="span" sx={{
                         fontWeight: 'bold',
-                        fontSize: '1.2rem',
-                        color: index < 3 ? 'primary.main' : 'text.primary'
+                        fontSize: '0.85rem',
+                        color: index < 3 ? 'primary.main' : 'text.primary',
+                        letterSpacing: '0.08em',
                       }}>
                         {item.word.toUpperCase()}
                       </Typography>
                     </Box>
-                    <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5, fontSize: '0.85rem' }}>
-                      Score: {item.score.toLocaleString()}
+                    <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mb: 0.75 }}>
+                      score: {item.score.toLocaleString()}
                     </Typography>
-                    <Typography variant="body2" sx={{
-                      fontSize: '0.75rem',
-                      fontWeight: 500,
-                      color: 'text.secondary',
-                      mb: 0.5
-                    }}>
-                      Best Second Words:
+                    <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mb: 0.4 }}>
+                      2nd words:
                     </Typography>
                     <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.3 }}>
                       {item.secondWords?.split(', ').map((word, i) => (
@@ -785,9 +857,9 @@ function App() {
                           size="small"
                           variant="outlined"
                           sx={{
-                            fontSize: '0.65rem',
-                            height: '20px',
-                            '& .MuiChip-label': { px: 0.8 }
+                            fontSize: '0.52rem',
+                            height: '16px',
+                            '& .MuiChip-label': { px: 0.6 }
                           }}
                         />
                       ))}
