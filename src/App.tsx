@@ -128,15 +128,6 @@ function App() {
   const debounceRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
   const exactRefs       = useRef<(HTMLInputElement | null)[]>([null, null, null, null, null]);
   const excludeRefs     = useRef<(HTMLInputElement | null)[]>([null, null, null, null, null]);
-  const bookmarkletRef  = useRef<HTMLAnchorElement>(null);
-  const [bookmarkletCopied, setBookmarkletCopied] = useState(false);
-
-  const bookmarkletCode = `javascript:(function(){var board=document.querySelector('[role="grid"]')||document.body;var tiles=Array.from(board.querySelectorAll('[data-state="correct"],[data-state="present"],[data-state="absent"]')).filter(function(el){return /^[A-Za-z]$/.test((el.textContent||'').trim());});var grey={},green=['','','','',''],yellow=['','','','',''];for(var r=0;r<Math.ceil(tiles.length/5);r++){var row=tiles.slice(r*5,r*5+5);if(row.length<5)continue;row.forEach(function(t,p){var s=t.getAttribute('data-state'),l=(t.textContent||'').trim().toUpperCase();if(s==='correct')green[p]=l;else if(s==='present'){if(yellow[p].indexOf(l)<0)yellow[p]+=l;}else if(s==='absent')grey[l]=1;});}green.forEach(function(l){delete grey[l];});yellow.forEach(function(l){l.split('').forEach(function(c){delete grey[c];});});var p=[];var ex=Object.keys(grey).join('');if(ex)p.push('ex='+ex);var g=green.map(function(l){return l||'_';}).join('');if(g!=='_____')p.push('g='+g);yellow.forEach(function(l,i){if(l)p.push('y'+i+'='+l);});window.open('${window.location.origin}'+(p.length?'?'+p.join('&'):''),'wordle-chooser');})();`;
-
-  // Set bookmarklet href via DOM — React blocks javascript: URLs at render time
-  useEffect(() => {
-    bookmarkletRef.current?.setAttribute('href', bookmarkletCode);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Load and process word data
   useEffect(() => {
@@ -225,30 +216,6 @@ function App() {
 
     loadWords();
   }, []);
-
-  // Read URL params set by the bookmarklet and pre-fill filters
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    if (!params.toString()) return;
-
-    const ex = params.get('ex') || '';
-    const g  = params.get('g')  || '_____';
-
-    const newExcluded = Array(26).fill('');
-    ex.toUpperCase().split('').forEach(letter => {
-      const idx = letter.charCodeAt(0) - 65;
-      if (idx >= 0 && idx < 26) newExcluded[idx] = letter.toLowerCase();
-    });
-
-    const newExact  = (g + '_____').slice(0, 5).split('').map(l => l === '_' ? '' : l.toLowerCase());
-    const newYellow = ['', '', '', '', ''];
-    for (let i = 0; i < 5; i++) {
-      newYellow[i] = (params.get(`y${i}`) || '').toLowerCase();
-    }
-
-    setFilterState({ excludedLetters: newExcluded, exactLetters: newExact, excludeLetters: newYellow });
-    window.history.replaceState({}, '', window.location.pathname);
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasFilters =
     filterState.excludedLetters.some(l => l !== '') ||
@@ -516,51 +483,6 @@ function App() {
             </Button>
           </Box>
         </Box>
-
-        {/* Bookmarklet Section */}
-        <Paper sx={{ p: 1.5, mb: 2, borderColor: `${WORDLE_YELLOW}44` }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap' }}>
-            <Typography variant="body2" sx={{ color: WORDLE_YELLOW, flexShrink: 0 }}>
-              🔖 wordle sync:
-            </Typography>
-            {/* Native <a> with href set via ref after mount — React blocks javascript: URLs at render time */}
-            <a
-              ref={bookmarkletRef}
-              href="#"
-              style={{
-                display: 'inline-block',
-                padding: '3px 10px',
-                border: `1px solid ${WORDLE_YELLOW}`,
-                borderRadius: '3px',
-                color: WORDLE_YELLOW,
-                fontSize: '0.65rem',
-                fontFamily: MONO,
-                fontWeight: 700,
-                letterSpacing: '0.06em',
-                textDecoration: 'none',
-                cursor: 'grab',
-                userSelect: 'none',
-              }}
-            >
-              ▶ IMPORT FROM WORDLE
-            </a>
-            <Button
-              size="small"
-              variant="outlined"
-              sx={{ fontSize: '0.58rem', py: 0.3, px: 1, borderColor: `${WORDLE_YELLOW}66`, color: 'text.secondary' }}
-              onClick={() => {
-                navigator.clipboard.writeText(bookmarkletCode);
-                setBookmarkletCopied(true);
-                setTimeout(() => setBookmarkletCopied(false), 2000);
-              }}
-            >
-              {bookmarkletCopied ? '✓ copied' : 'copy url'}
-            </Button>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-              drag link to bookmarks bar → click while playing wordle to auto-fill
-            </Typography>
-          </Box>
-        </Paper>
 
         {/* Filter Section */}
         <Paper sx={{ p: 2, mb: 2 }}>
